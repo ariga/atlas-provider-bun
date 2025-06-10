@@ -45,7 +45,7 @@ func TestPostgreSQLConfig(t *testing.T) {
 
 func TestSQLServerConfig(t *testing.T) {
 	resetSession()
-	l := bunschema.New("mssql")
+	l := bunschema.New("mssql", bunschema.WithStmtDelimiter("\nGO"))
 	sql, err := l.Load(
 		(*models.User)(nil),
 		(*models.Story)(nil),
