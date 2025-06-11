@@ -93,7 +93,9 @@ func (l *Loader) Load(models ...any) (string, error) {
 	db := bun.NewDB(rc, di)
 	db.RegisterModel(models...)
 	for _, m := range models {
-		if _, err := db.NewCreateTable().WithForeignKeys().Model(m).Exec(context.Background()); err != nil {
+		if _, err := db.NewCreateTable().
+			Model(m).
+			Exec(context.Background()); err != nil {
 			return "", err
 		}
 	}
