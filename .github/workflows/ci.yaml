@@ -39,19 +39,14 @@ jobs:
       - uses: ariga/setup-atlas@v0
       - working-directory: internal/testdata
         run: |
-          atlas migrate diff --env gorm --var dialect=${{ matrix.dialect }}
-        env:
-          ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
-      - working-directory: internal/testdata/circularfks
-        run: |
-          atlas migrate diff --env gorm --var dialect=${{ matrix.dialect }}
+          atlas migrate diff --env bun --var dialect=${{ matrix.dialect }}
         env:
           ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
       - name: Verify migrations generated
         run: |
           status=$(git status --porcelain)
           if [ -n "$status" ]; then
-            echo "you need to run 'atlas migrate diff --env gorm' and commit the changes"
+            echo "you need to run 'atlas migrate diff --env bun' and commit the changes"
             echo "$status"
             git --no-pager diff
             exit 1

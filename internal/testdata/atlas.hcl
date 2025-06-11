@@ -12,7 +12,7 @@ locals {
   }[var.dialect]
 }
 
-data "external_schema" "gorm" {
+data "external_schema" "bun" {
   program = [
     "go",
     "run",
@@ -24,8 +24,8 @@ data "external_schema" "gorm" {
   ]
 }
 
-env "gorm" {
-  src = data.external_schema.gorm.url
+env "bun" {
+  src = data.external_schema.bun.url
   dev = local.dev_url
   migration {
     dir = "file://migrations/${var.dialect}"
