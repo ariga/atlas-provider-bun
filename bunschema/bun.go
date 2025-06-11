@@ -107,7 +107,12 @@ func (l *Loader) Load(models ...any) (string, error) {
 			if l.dialect == "oracle" {
 				for _, rel := range t.Relations {
 					// Oracle does not support ON UPDATE, but Bun sets it to NO ACTION by default
+					// Tracking issue: https://github.com/uptrace/bun/issues/1212
 					rel.OnUpdate = ""
+					// Oracle supports ON DELETE CASCADE, and SET NULL only, but Bun sets it to NO ACTION by default
+					if rel.OnDelete != "CASCADE" && rel.OnDelete != "SET NULL" {
+						rel.OnDelete = ""
+					}
 				}
 			}
 			continue
