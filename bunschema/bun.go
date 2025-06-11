@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"ariga.io/atlas-go-sdk/recordriver"
@@ -92,9 +93,36 @@ func (l *Loader) Load(models ...any) (string, error) {
 	}
 	db := bun.NewDB(rc, di)
 	db.RegisterModel(models...)
-	for _, m := range models {
+	// Bun don't maintain order of tables, but we need tables to be created in deterministic order
+	tables := db.Dialect().Tables().All()
+	slices.SortFunc(tables, func(a, b *schema.Table) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	var withFks []*schema.Table
+	// Separate tables by dependencies and create them in correct order
+	// Table with relations must be created after all its dependencies
+	for _, t := range tables {
+		if len(t.Relations) > 0 {
+			withFks = append(withFks, t)
+			if l.dialect == "oracle" {
+				for _, rel := range t.Relations {
+					// Oracle does not support ON UPDATE, but Bun sets it to NO ACTION by default
+					rel.OnUpdate = ""
+				}
+			}
+			continue
+		}
 		if _, err := db.NewCreateTable().
-			Model(m).
+			Model(t.ZeroIface).
+			Exec(context.Background()); err != nil {
+			return "", err
+		}
+	}
+	// Create tables with foreign keys after dependencies exist
+	for _, t := range withFks {
+		if _, err := db.NewCreateTable().
+			Model(t.ZeroIface).
+			WithForeignKeys().
 			Exec(context.Background()); err != nil {
 			return "", err
 		}
