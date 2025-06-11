@@ -1,0 +1,30 @@
+package main
+
+import (
+	"io"
+	"fmt"
+	"os"
+
+	{{- range .Imports }}
+		"{{ . }}"
+	{{- end}}
+	"ariga.io/atlas-provider-bun/bunschema"
+	_ "ariga.io/atlas-go-sdk/recordriver"
+)
+
+func main() {
+	stmts, err := bunschema.New("{{ .Dialect }}"
+		{{- if eq .Dialect "mssql" -}}
+			, bunschema.WithStmtDelimiter("\nGO")
+		{{- end -}}
+			).Load(
+		{{- range .Models }}
+			&{{ .PkgName }}.{{ .Name }}{},
+		{{- end }}
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load bun schema: %v\n", err)
+		os.Exit(1)
+	}
+	io.WriteString(os.Stdout, stmts)
+}
