@@ -1,0 +1,3 @@
+CREATE TABLE "items" ("id" BIGSERIAL NOT NULL, PRIMARY KEY ("id"));
+CREATE TABLE "orders" ("id" BIGSERIAL NOT NULL, PRIMARY KEY ("id"));
+CREATE TABLE "order_to_items" ("order_id" BIGINT NOT NULL, "item_id" BIGINT NOT NULL, PRIMARY KEY ("order_id", "item_id"), FOREIGN KEY ("item_id") REFERENCES "items" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION, FOREIGN KEY ("order_id") REFERENCES "orders" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION);

@@ -6,12 +6,12 @@ require (
 	ariga.io/atlas-go-sdk v0.7.2
 	github.com/alecthomas/kong v1.11.0
 	github.com/stretchr/testify v1.8.4
-	github.com/uptrace/bun v1.2.12
-	github.com/uptrace/bun/dialect/mssqldialect v1.2.12
-	github.com/uptrace/bun/dialect/mysqldialect v1.2.12
-	github.com/uptrace/bun/dialect/oracledialect v1.2.12
-	github.com/uptrace/bun/dialect/pgdialect v1.2.12
-	github.com/uptrace/bun/dialect/sqlitedialect v1.2.12
+	github.com/uptrace/bun v1.2.13
+	github.com/uptrace/bun/dialect/mssqldialect v1.2.13
+	github.com/uptrace/bun/dialect/mysqldialect v1.2.13
+	github.com/uptrace/bun/dialect/oracledialect v1.2.13
+	github.com/uptrace/bun/dialect/pgdialect v1.2.13
+	github.com/uptrace/bun/dialect/sqlitedialect v1.2.13
 	golang.org/x/tools v0.34.0
 )
 
