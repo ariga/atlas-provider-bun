@@ -44,7 +44,7 @@ jobs:
           ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
       - working-directory: internal/testdata/m2m
         run: |
-          atlas migrate apply --env bun --var dialect=${{ matrix.dialect }}
+          atlas migrate diff --env bun --var dialect=${{ matrix.dialect }}
         env:
           ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
       - name: Verify migrations generated
