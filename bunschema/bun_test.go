@@ -2,6 +2,7 @@ package bunschema_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"ariga.io/atlas-go-sdk/recordriver"
@@ -19,15 +20,16 @@ func TestMySQLConfig(t *testing.T) {
 		(*models.Story)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/mysql_default.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/mysql_default.sql")
 	resetSession()
 	l = bunschema.New("mysql", bunschema.WithJoinTable(&m2m.OrderToItem{}))
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
+		(*m2m.OrderToItem)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/mysql_m2m.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/mysql_m2m.sql")
 }
 
 func TestSQLiteConfig(t *testing.T) {
@@ -38,15 +40,16 @@ func TestSQLiteConfig(t *testing.T) {
 		(*models.Story)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/sqlite_default.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/sqlite_default.sql")
 	resetSession()
 	l = bunschema.New("sqlite", bunschema.WithJoinTable(&m2m.OrderToItem{}))
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
+		(*m2m.OrderToItem)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/sqlite_m2m.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/sqlite_m2m.sql")
 }
 
 func TestPostgreSQLConfig(t *testing.T) {
@@ -57,15 +60,16 @@ func TestPostgreSQLConfig(t *testing.T) {
 		(*models.Story)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/postgres_default.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/postgres_default.sql")
 	resetSession()
 	l = bunschema.New("postgres", bunschema.WithJoinTable(&m2m.OrderToItem{}))
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
+		(*m2m.OrderToItem)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/postgres_m2m.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/postgres_m2m.sql")
 }
 
 func TestSQLServerConfig(t *testing.T) {
@@ -76,15 +80,16 @@ func TestSQLServerConfig(t *testing.T) {
 		(*models.Story)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/mssql_default.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/mssql_default.sql")
 	resetSession()
 	l = bunschema.New("mssql", bunschema.WithStmtDelimiter("\nGO"), bunschema.WithJoinTable(&m2m.OrderToItem{}))
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
+		(*m2m.OrderToItem)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/mssql_m2m.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/mssql_m2m.sql")
 }
 
 func TestOracleConfig(t *testing.T) {
@@ -95,15 +100,16 @@ func TestOracleConfig(t *testing.T) {
 		(*models.Story)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/oracle_default.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/oracle_default.sql")
 	resetSession()
 	l = bunschema.New("oracle", bunschema.WithJoinTable(&m2m.OrderToItem{}))
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
+		(*m2m.OrderToItem)(nil),
 	)
 	require.NoError(t, err)
-	requireEqualContent(t, sql, "testdata/oracle_m2m.sql")
+	requireEqualContent(t, removeCwd(sql), "testdata/oracle_m2m.sql")
 }
 
 func resetSession() {
@@ -117,4 +123,15 @@ func requireEqualContent(t *testing.T, actual, fileName string) {
 	buf, err := os.ReadFile(fileName)
 	require.NoError(t, err)
 	require.Equal(t, string(buf), actual)
+}
+
+// removeCwd converts absolute paths to relative paths in the test
+func removeCwd(text string) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return text
+	}
+	projectRoot := strings.TrimSuffix(cwd, string(os.PathSeparator)+"bunschema")
+	result := strings.ReplaceAll(text, projectRoot+string(os.PathSeparator), "")
+	return result
 }

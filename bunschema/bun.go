@@ -6,6 +6,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/token"
 	"reflect"
 	"slices"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/schema"
+	"golang.org/x/tools/go/packages"
 )
 
 // Option is a function that configures the Loader.
@@ -137,12 +140,95 @@ func (l *Loader) Load(models ...any) (string, error) {
 		return "", fmt.Errorf("failed to read session")
 	}
 	var buf strings.Builder
+	pos, err := l.modelsPos(models...)
+	if err != nil {
+		return "", fmt.Errorf("failed to get models position: %w", err)
+	}
+	for _, t := range tables {
+		if p, ok := pos[typeID(t.Type)]; ok {
+			if _, err = fmt.Fprintf(&buf, "-- atlas:pos %s[type=table] %s\n", t.Name, p); err != nil {
+				return "", err
+			}
+		}
+	}
+	// Add another new line to separate the file directives from the statements.
+	if _, err = fmt.Fprintln(&buf); err != nil {
+		return "", err
+	}
 	for _, stmt := range ss.Statements {
 		if _, err = fmt.Fprintln(&buf, stmt+l.delimiter); err != nil {
 			return "", err
 		}
 	}
 	return buf.String(), nil
+}
+
+func (l *Loader) modelsPos(models ...any) (map[string]string, error) {
+	pos := make(map[string]string)
+	for _, m := range models {
+		p, err := location(m)
+		if err != nil {
+			return nil, err
+		}
+		pos[typeID(reflect.TypeOf(m))] = p
+	}
+	return pos, nil
+}
+
+// location uses the go/packages library to find the file and line number
+// of a struct definition.
+func location(model any) (string, error) {
+	// Bun Models are always pointers to structs.
+	if err := validate(model); err != nil {
+		return "", fmt.Errorf("invalid model %T: %w", model, err)
+	}
+	typ := reflect.TypeOf(model).Elem()
+	pkgPath := typ.PkgPath()
+	if pkgPath == "" {
+		return "", fmt.Errorf("could not determine package path for struct '%s'", typ.Name())
+	}
+	fset := token.NewFileSet()
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedFiles | packages.NeedSyntax,
+		Fset: fset,
+	}, pkgPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to load package: %w", err)
+	}
+	if packages.PrintErrors(pkgs) > 0 {
+		return "", fmt.Errorf("errors while loading package %s", pkgPath)
+	}
+	for _, pkg := range pkgs {
+		for i, fileNode := range pkg.Syntax {
+			var found *ast.TypeSpec
+			ast.Inspect(fileNode, func(n ast.Node) bool {
+				if found != nil {
+					return false // Stop traversal once found
+				}
+				typeSpec, ok := n.(*ast.TypeSpec)
+				if ok && typeSpec.Name != nil && typeSpec.Name.Name == typ.Name() {
+					found = typeSpec
+					return false
+				}
+				return true
+			})
+			if found != nil {
+				return fmt.Sprintf("%s:%d-%d",
+					pkg.GoFiles[i],
+					fset.Position(found.Pos()).Line,
+					fset.Position(found.Type.End()).Line,
+				), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("struct '%s' not found in package '%s'", typ.Name(), pkgPath)
+}
+
+func typeID(t reflect.Type) string {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return fmt.Sprintf("%s.%s", t.PkgPath(), t.Name())
 }
 
 // validate ensures that the provided model is a pointer to a struct.
@@ -153,7 +239,7 @@ func validate(v any) error {
 		return fmt.Errorf("model is nil")
 	}
 	if t.Kind() != reflect.Ptr {
-		return fmt.Errorf("model must be 1 a pointer, got %s", t.Kind())
+		return fmt.Errorf("model must be a pointer, got %s", t.Kind())
 	}
 	if t.Elem().Kind() != reflect.Struct {
 		return fmt.Errorf("model must point to a struct, got pointer to %s", t.Elem().Kind())
