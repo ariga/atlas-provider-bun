@@ -25,8 +25,9 @@ type Option func(*Loader)
 
 // Loader is the struct that holds the loader configuration.
 type Loader struct {
-	dialect   string
-	delimiter string
+	dialect    string
+	delimiter  string
+	joinTables []any
 }
 
 // New creates a new Loader.
@@ -47,6 +48,13 @@ func New(dialect string, opts ...Option) *Loader {
 func WithStmtDelimiter(delimiter string) Option {
 	return func(l *Loader) {
 		l.delimiter = delimiter
+	}
+}
+
+// WithJoinTable registers the given models as join tables.
+func WithJoinTable(models ...any) Option {
+	return func(l *Loader) {
+		l.joinTables = append(l.joinTables, models...)
 	}
 }
 
@@ -92,39 +100,31 @@ func (l *Loader) Load(models ...any) (string, error) {
 		return "", errors.New("unsupported dialect: " + l.dialect)
 	}
 	db := bun.NewDB(rc, di)
+	for _, m := range l.joinTables {
+		// Bun requires join tables to be registered before use
+		db.RegisterModel(m)
+	}
 	db.RegisterModel(models...)
-	// Bun don't maintain order of tables, but we need tables to be created in deterministic order
-	tables := db.Dialect().Tables().All()
-	slices.SortFunc(tables, func(a, b *schema.Table) int {
-		return strings.Compare(a.Name, b.Name)
-	})
-	var withFks []*schema.Table
-	// Separate tables by dependencies and create them in correct order
-	// Table with relations must be created after all its dependencies
-	for _, t := range tables {
-		if len(t.Relations) > 0 {
-			withFks = append(withFks, t)
-			if l.dialect == "oracle" {
-				for _, rel := range t.Relations {
-					// Oracle does not support ON UPDATE, but Bun sets it to NO ACTION by default
-					// Tracking issue: https://github.com/uptrace/bun/issues/1212
-					rel.OnUpdate = ""
-					// Oracle supports ON DELETE CASCADE, and SET NULL only, but Bun sets it to NO ACTION by default
-					if rel.OnDelete != "CASCADE" && rel.OnDelete != "SET NULL" {
-						rel.OnDelete = ""
-					}
+	// Sort tables topologically based on their dependencies
+	tables, err := topologicalSort(db.Dialect().Tables().All())
+	if err != nil {
+		return "", fmt.Errorf("failed to sort tables: %w", err)
+	}
+	if l.dialect == "oracle" {
+		for _, t := range tables {
+			for _, rel := range t.Relations {
+				// Oracle does not support ON UPDATE, but Bun sets it to NO ACTION by default
+				// Tracking issue: https://github.com/uptrace/bun/issues/1212
+				rel.OnUpdate = ""
+				// Oracle supports ON DELETE CASCADE, and SET NULL only, but Bun sets it to NO ACTION by default
+				if rel.OnDelete != "CASCADE" && rel.OnDelete != "SET NULL" {
+					rel.OnDelete = ""
 				}
 			}
-			continue
-		}
-		if _, err := db.NewCreateTable().
-			Model(t.ZeroIface).
-			Exec(context.Background()); err != nil {
-			return "", err
 		}
 	}
-	// Create tables with foreign keys after dependencies exist
-	for _, t := range withFks {
+	// Create tables in dependency order
+	for _, t := range tables {
 		if _, err := db.NewCreateTable().
 			Model(t.ZeroIface).
 			WithForeignKeys().
@@ -159,4 +159,65 @@ func validate(v any) error {
 		return fmt.Errorf("model must point to a struct, got pointer to %s", t.Elem().Kind())
 	}
 	return nil
+}
+
+// topologicalSort returns tables in dependency order (dependencies first).
+func topologicalSort(tables []*schema.Table) ([]*schema.Table, error) {
+	// Sort input tables by name for deterministic ordering
+	slices.SortFunc(tables, func(a, b *schema.Table) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	tableMap := make(map[string]*schema.Table, len(tables))
+	for _, t := range tables {
+		tableMap[t.Name] = t
+	}
+	visited := make(map[string]bool, len(tables))
+	visiting := make(map[string]bool, len(tables)) // tracks tables currently being visited (for cycle detection)
+	var result []*schema.Table
+	var visit func(t *schema.Table) error
+	visit = func(t *schema.Table) error {
+		if visited[t.Name] {
+			return nil
+		}
+		if visiting[t.Name] {
+			return fmt.Errorf("circular dependency detected at table %s", t.Name)
+		}
+		visiting[t.Name] = true
+		for _, dep := range getTableDependencies(t) {
+			if depTable, ok := tableMap[dep]; ok {
+				if err := visit(depTable); err != nil {
+					return err
+				}
+			}
+		}
+		visiting[t.Name] = false
+		visited[t.Name] = true
+		result = append(result, t)
+		return nil
+	}
+	for _, t := range tables {
+		if !visited[t.Name] {
+			if err := visit(t); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return result, nil
+}
+
+// getTableDependencies returns the names of tables that this table depends on
+func getTableDependencies(t *schema.Table) []string {
+	var deps []string
+	depMap := make(map[string]bool)
+	for _, rel := range t.Relations {
+		if rel.Type == schema.BelongsToRelation {
+			// This table has foreign keys pointing to rel.JoinTable
+			if !depMap[rel.JoinTable.Name] && rel.JoinTable.Name != t.Name {
+				deps = append(deps, rel.JoinTable.Name)
+				depMap[rel.JoinTable.Name] = true
+			}
+		}
+	}
+	return deps
 }
