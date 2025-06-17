@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 
+	"maps"
+
 	"ariga.io/atlas-go-sdk/recordriver"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/mssqldialect"
@@ -164,64 +166,84 @@ func (l *Loader) Load(models ...any) (string, error) {
 }
 
 func (l *Loader) modelsPos(models ...any) (map[string]string, error) {
-	pos := make(map[string]string)
+	var (
+		pkgModels = make(map[string][]any)
+		pos       = make(map[string]string)
+	)
 	for _, m := range models {
-		p, err := location(m)
+		if err := validate(m); err != nil {
+			return nil, fmt.Errorf("invalid model %T: %w", m, err)
+		}
+		typ := reflect.TypeOf(m).Elem()
+		pkgPath := typ.PkgPath()
+		if pkgPath == "" {
+			return nil, fmt.Errorf("could not determine package path for struct '%s'", typ.Name())
+		}
+		pkgModels[pkgPath] = append(pkgModels[pkgPath], m)
+	}
+	for p, m := range pkgModels {
+		pkgPos, err := l.packagePos(p, m)
 		if err != nil {
 			return nil, err
 		}
-		pos[typeID(reflect.TypeOf(m))] = p
+		maps.Copy(pos, pkgPos)
 	}
 	return pos, nil
 }
 
-// location uses the go/packages library to find the file and line number
-// of a struct definition.
-func location(model any) (string, error) {
-	// Bun Models are always pointers to structs.
-	if err := validate(model); err != nil {
-		return "", fmt.Errorf("invalid model %T: %w", model, err)
-	}
-	typ := reflect.TypeOf(model).Elem()
-	pkgPath := typ.PkgPath()
-	if pkgPath == "" {
-		return "", fmt.Errorf("could not determine package path for struct '%s'", typ.Name())
-	}
-	fset := token.NewFileSet()
+// packagePos finds positions for all structs within a single package.
+// It returns a map in the format pkg.struct=location
+func (l *Loader) packagePos(pkgPath string, models []any) (map[string]string, error) {
+	var (
+		pos     = make(map[string]string)
+		structs = make(map[string]reflect.Type)
+		found   = make(map[string]bool)
+		fset    = token.NewFileSet()
+	)
 	pkgs, err := packages.Load(&packages.Config{
 		Mode: packages.NeedFiles | packages.NeedSyntax,
 		Fset: fset,
 	}, pkgPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to load package: %w", err)
+		return nil, fmt.Errorf("failed to load package: %w", err)
 	}
 	if packages.PrintErrors(pkgs) > 0 {
-		return "", fmt.Errorf("errors while loading package %s", pkgPath)
+		return nil, fmt.Errorf("errors while loading package %s", pkgPath)
+	}
+	for _, m := range models {
+		typ := reflect.TypeOf(m).Elem()
+		structs[typ.Name()] = typ
 	}
 	for _, pkg := range pkgs {
-		for i, fileNode := range pkg.Syntax {
-			var found *ast.TypeSpec
-			ast.Inspect(fileNode, func(n ast.Node) bool {
-				if found != nil {
-					return false // Stop traversal once found
+		for i, fnode := range pkg.Syntax {
+			ast.Inspect(fnode, func(n ast.Node) bool {
+				ts, ok := n.(*ast.TypeSpec)
+				if !ok || ts.Name == nil {
+					return true
 				}
-				typeSpec, ok := n.(*ast.TypeSpec)
-				if ok && typeSpec.Name != nil && typeSpec.Name.Name == typ.Name() {
-					found = typeSpec
-					return false
+				name := ts.Name.Name
+				if typ, exists := structs[name]; exists && !found[name] {
+					location := fmt.Sprintf("%s:%d-%d",
+						pkg.GoFiles[i],
+						fset.Position(ts.Pos()).Line,
+						fset.Position(ts.Type.End()).Line,
+					)
+					pos[typeID(typ)] = location
+					found[name] = true
 				}
 				return true
 			})
-			if found != nil {
-				return fmt.Sprintf("%s:%d-%d",
-					pkg.GoFiles[i],
-					fset.Position(found.Pos()).Line,
-					fset.Position(found.Type.End()).Line,
-				), nil
+			if len(found) == len(structs) { // all structs found
+				break
 			}
 		}
 	}
-	return "", fmt.Errorf("struct '%s' not found in package '%s'", typ.Name(), pkgPath)
+	for name := range structs {
+		if !found[name] {
+			return nil, fmt.Errorf("struct '%s' not found in package '%s'", name, pkgPath)
+		}
+	}
+	return pos, nil
 }
 
 func typeID(t reflect.Type) string {
