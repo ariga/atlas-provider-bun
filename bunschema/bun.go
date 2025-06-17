@@ -141,13 +141,13 @@ func (l *Loader) Load(models ...any) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("failed to read session")
 	}
-	var buf strings.Builder
-	pos, err := l.modelsPos(models...)
+	pos, err := l.tablePos(tables)
 	if err != nil {
 		return "", fmt.Errorf("failed to get models position: %w", err)
 	}
+	var buf strings.Builder
 	for _, t := range tables {
-		if p, ok := pos[typeID(t.Type)]; ok {
+		if p, ok := pos(t.ZeroIface); ok {
 			if _, err = fmt.Fprintf(&buf, "-- atlas:pos %s[type=table] %s\n", t.Name, p); err != nil {
 				return "", err
 			}
@@ -165,54 +165,55 @@ func (l *Loader) Load(models ...any) (string, error) {
 	return buf.String(), nil
 }
 
-func (l *Loader) modelsPos(models ...any) (map[string]string, error) {
+func (l *Loader) tablePos(tables []*schema.Table) (func(any) (string, bool), error) {
 	var (
-		pkgModels = make(map[string][]any)
+		pkgTables = make(map[string][]*schema.Table)
 		pos       = make(map[string]string)
 	)
-	for _, m := range models {
-		if err := validate(m); err != nil {
-			return nil, fmt.Errorf("invalid model %T: %w", m, err)
-		}
-		typ := reflect.TypeOf(m).Elem()
+	for _, t := range tables {
+		typ := t.Type
 		pkgPath := typ.PkgPath()
 		if pkgPath == "" {
 			return nil, fmt.Errorf("could not determine package path for struct '%s'", typ.Name())
 		}
-		pkgModels[pkgPath] = append(pkgModels[pkgPath], m)
+		pkgTables[pkgPath] = append(pkgTables[pkgPath], t)
 	}
-	for p, m := range pkgModels {
-		pkgPos, err := l.packagePos(p, m)
+	for p, t := range pkgTables {
+		pkgPos, err := l.packagePos(p, t)
 		if err != nil {
 			return nil, err
 		}
 		maps.Copy(pos, pkgPos)
 	}
-	return pos, nil
+	return func(m any) (string, bool) {
+		val, ok := pos[modelID(m)]
+		return val, ok
+	}, nil
 }
 
 // packagePos finds positions for all structs within a single package.
 // It returns a map in the format pkg.struct=location
-func (l *Loader) packagePos(pkgPath string, models []any) (map[string]string, error) {
+func (l *Loader) packagePos(pkgPath string, tables []*schema.Table) (map[string]string, error) {
 	var (
-		pos     = make(map[string]string)
-		structs = make(map[string]reflect.Type)
-		found   = make(map[string]bool)
-		fset    = token.NewFileSet()
+		tableModel = make(map[string]any, len(tables))
+		pos        = make(map[string]string, len(tables))
+		found      = make(map[string]bool, len(tables))
+		fset       = token.NewFileSet()
 	)
 	pkgs, err := packages.Load(&packages.Config{
 		Mode: packages.NeedFiles | packages.NeedSyntax,
 		Fset: fset,
 	}, pkgPath)
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, fmt.Errorf("failed to load package: %w", err)
-	}
-	if packages.PrintErrors(pkgs) > 0 {
+	case packages.PrintErrors(pkgs) > 0:
 		return nil, fmt.Errorf("errors while loading package %s", pkgPath)
+	case len(pkgs) == 0:
+		return nil, fmt.Errorf("package %s not found", pkgPath)
 	}
-	for _, m := range models {
-		typ := reflect.TypeOf(m).Elem()
-		structs[typ.Name()] = typ
+	for _, t := range tables {
+		tableModel[t.TypeName] = t.ZeroIface
 	}
 	for _, pkg := range pkgs {
 		for i, fnode := range pkg.Syntax {
@@ -222,31 +223,33 @@ func (l *Loader) packagePos(pkgPath string, models []any) (map[string]string, er
 					return true
 				}
 				name := ts.Name.Name
-				if typ, exists := structs[name]; exists && !found[name] {
+				if m, exists := tableModel[name]; exists && !found[name] {
 					location := fmt.Sprintf("%s:%d-%d",
 						pkg.GoFiles[i],
 						fset.Position(ts.Pos()).Line,
 						fset.Position(ts.Type.End()).Line,
 					)
-					pos[typeID(typ)] = location
+					pos[modelID(m)] = location
 					found[name] = true
 				}
 				return true
 			})
-			if len(found) == len(structs) { // all structs found
+			if len(found) == len(tables) { // all tables found
 				break
 			}
 		}
 	}
-	for name := range structs {
-		if !found[name] {
-			return nil, fmt.Errorf("struct '%s' not found in package '%s'", name, pkgPath)
+	for _, t := range tables {
+		if !found[t.TypeName] {
+			return nil, fmt.Errorf("struct '%s' not found in package '%s'", t.TypeName, pkgPath)
 		}
 	}
 	return pos, nil
 }
 
-func typeID(t reflect.Type) string {
+// modelID returns a unique identifier for a model.
+func modelID(m any) string {
+	t := reflect.TypeOf(m)
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -257,13 +260,12 @@ func typeID(t reflect.Type) string {
 // This is required by Bun; otherwise, it will panic at runtime.
 func validate(v any) error {
 	t := reflect.TypeOf(v)
-	if t == nil {
+	switch {
+	case t == nil:
 		return fmt.Errorf("model is nil")
-	}
-	if t.Kind() != reflect.Ptr {
+	case t.Kind() != reflect.Ptr:
 		return fmt.Errorf("model must be a pointer, got %s", t.Kind())
-	}
-	if t.Elem().Kind() != reflect.Struct {
+	case t.Elem().Kind() != reflect.Struct:
 		return fmt.Errorf("model must point to a struct, got pointer to %s", t.Elem().Kind())
 	}
 	return nil
