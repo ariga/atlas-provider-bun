@@ -143,7 +143,7 @@ func (l *Loader) Load(models ...any) (string, error) {
 	}
 	pos, err := l.tablePos(tables)
 	if err != nil {
-		return "", fmt.Errorf("failed to get models position: %w", err)
+		return "", fmt.Errorf("failed to get tables position: %w", err)
 	}
 	var buf strings.Builder
 	for _, t := range tables {
