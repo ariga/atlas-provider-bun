@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"ariga.io/atlas-provider-bun/bunschema"
+	"ariga.io/atlas-provider-bun/bunschema/dialect"
 	"ariga.io/atlas-provider-bun/internal/testdata/m2m/models"
 )
 
@@ -13,7 +14,7 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: go run . <dialect>")
 	}
-	stmt, err := bunschema.New(os.Args[1],
+	stmt, err := bunschema.New(dialect.Dialect(os.Args[1]),
 		bunschema.WithJoinTable(&models.OrderToItem{}),
 	).Load(
 		&models.OrderToItem{},
