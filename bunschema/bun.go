@@ -32,6 +32,7 @@ type Loader struct {
 	dialect    string
 	delimiter  string
 	joinTables []any
+	buildTags  string
 }
 
 // New creates a new Loader.
@@ -59,6 +60,13 @@ func WithStmtDelimiter(delimiter string) Option {
 func WithJoinTable(models ...any) Option {
 	return func(l *Loader) {
 		l.joinTables = append(l.joinTables, models...)
+	}
+}
+
+// WithBuildTags sets the build tags to use when loading packages.
+func WithBuildTags(tags string) Option {
+	return func(l *Loader) {
+		l.buildTags = tags
 	}
 }
 
@@ -199,10 +207,14 @@ func (l *Loader) packagePos(pkgPath string, tables []*schema.Table) (map[string]
 		found      = make(map[string]bool, len(tables))
 		fset       = token.NewFileSet()
 	)
-	pkgs, err := packages.Load(&packages.Config{
+	cfg := &packages.Config{
 		Mode: packages.NeedFiles | packages.NeedSyntax,
 		Fset: fset,
-	}, pkgPath)
+	}
+	if l.buildTags != "" {
+		cfg.BuildFlags = []string{"-tags=" + l.buildTags}
+	}
+	pkgs, err := packages.Load(cfg, pkgPath)
 	switch {
 	case err != nil:
 		return nil, fmt.Errorf("failed to load package: %w", err)
