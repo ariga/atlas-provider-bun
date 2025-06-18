@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"ariga.io/atlas-go-sdk/recordriver"
-	"ariga.io/atlas-provider-bun/bunschema/dialect"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/mssqldialect"
 	"github.com/uptrace/bun/dialect/mysqldialect"
@@ -24,19 +23,30 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// Dialect is the type for supported dialects.
+type Dialect string
+
+const (
+	DialectMSSQL    Dialect = "mssql"
+	DialectMySQL    Dialect = "mysql"
+	DialectOracle   Dialect = "oracle"
+	DialectPostgres Dialect = "postgres"
+	DialectSQLite   Dialect = "sqlite"
+)
+
 // Option is a function that configures the Loader.
 type Option func(*Loader)
 
 // Loader is the struct that holds the loader configuration.
 type Loader struct {
-	dialect    dialect.Dialect
+	dialect    Dialect
 	delimiter  string
 	joinTables []any
 	buildTags  string
 }
 
 // New creates a new Loader.
-func New(d dialect.Dialect, opts ...Option) *Loader {
+func New(d Dialect, opts ...Option) *Loader {
 	l := &Loader{
 		dialect:   d,
 		delimiter: ";",
@@ -84,29 +94,29 @@ func (l *Loader) Load(models ...any) (string, error) {
 	defer rc.Close()
 	var di schema.Dialect
 	switch l.dialect {
-	case dialect.MySQL:
+	case DialectMySQL:
 		di = mysqldialect.New()
 		recordriver.SetResponse("bun", "SELECT version()", &recordriver.Response{
 			Cols: []string{"version()"},
 			Data: [][]driver.Value{{"8.0.24"}},
 		})
 
-	case dialect.SQLite:
+	case DialectSQLite:
 		di = sqlitedialect.New()
 		recordriver.SetResponse("bun", "select sqlite_version()", &recordriver.Response{
 			Cols: []string{"sqlite_version()"},
 			Data: [][]driver.Value{{"3.30.1"}},
 		})
 
-	case dialect.MSSQL:
+	case DialectMSSQL:
 		di = mssqldialect.New()
 		recordriver.SetResponse("bun", "SELECT @@VERSION", &recordriver.Response{
 			Cols: []string{"SELECT @@VERSION"},
 			Data: [][]driver.Value{{"15.0.2000.58"}},
 		})
-	case dialect.Oracle:
+	case DialectOracle:
 		di = oracledialect.New()
-	case dialect.Postgres:
+	case DialectPostgres:
 		di = pgdialect.New()
 	default:
 		return "", fmt.Errorf("unsupported dialect: %s", l.dialect)
@@ -122,7 +132,7 @@ func (l *Loader) Load(models ...any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to sort tables: %w", err)
 	}
-	if l.dialect == dialect.Oracle {
+	if l.dialect == DialectOracle {
 		for _, t := range tables {
 			for _, rel := range t.Relations {
 				// Oracle does not support ON UPDATE, but Bun sets it to NO ACTION by default

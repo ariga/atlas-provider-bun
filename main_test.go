@@ -6,16 +6,17 @@ import (
 	"strings"
 	"testing"
 
+	"ariga.io/atlas-provider-bun/bunschema"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoad(t *testing.T) {
-	for _, dialect := range []string{"mysql", "sqlite", "postgres", "mssql", "oracle"} {
-		t.Run(dialect, func(t *testing.T) {
+	for _, d := range []string{"mysql", "sqlite", "postgres", "mssql", "oracle"} {
+		t.Run(d, func(t *testing.T) {
 			var buf bytes.Buffer
 			cmd := &LoadCmd{
 				Path:    "./internal/testdata/models",
-				Dialect: dialect,
+				Dialect: bunschema.Dialect(d),
 				out:     &buf,
 			}
 			err := cmd.Run()
@@ -25,7 +26,7 @@ func TestLoad(t *testing.T) {
 			cwd, err := os.Getwd()
 			require.NoError(t, err)
 			for _, file := range files {
-				if strings.HasPrefix(file.Name(), dialect+"_default.sql") {
+				if strings.HasPrefix(file.Name(), d+"_default.sql") {
 					content, err := os.ReadFile("bunschema/testdata/" + file.Name())
 					require.NoError(t, err)
 					bufStr := strings.ReplaceAll(buf.String(), cwd+string(os.PathSeparator), "")

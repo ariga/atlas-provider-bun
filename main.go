@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"ariga.io/atlas-provider-bun/bunschema"
-
 	"github.com/alecthomas/kong"
 	"golang.org/x/tools/go/packages"
 )
