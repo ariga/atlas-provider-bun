@@ -100,9 +100,9 @@ import (
 
 func main() {
   stmts, err := bunschema.New(bunschema.DialectMySQL).Load(
-		&User{},
-		&Post{},
-	)
+    &models.User{},
+    &models.Post{},
+  )
   if err != nil {
     fmt.Fprintf(os.Stderr, "failed to load bun schema: %v\n", err)
     os.Exit(1)
