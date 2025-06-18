@@ -39,22 +39,27 @@ func main() {
 
 // LoadCmd is the command to load models
 type LoadCmd struct {
-	Path    string   `help:"Path to the model files" required:""`
-	Models  []string `help:"Models to load"`
-	Dialect string   `help:"dialect to use" enum:"mysql,sqlite,postgres,mssql,oracle" required:""`
-	out     io.Writer
+	Path      string   `help:"Path to the model files" required:""`
+	BuildTags string   `help:"Build tags to use" default:""`
+	Models    []string `help:"Models to load"`
+	Dialect   string   `help:"Dialect to use" enum:"mysql,sqlite,postgres,mssql,oracle" required:""`
+	out       io.Writer
 }
 
 func (c *LoadCmd) Run() error {
 	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule | packages.NeedDeps}
+	if c.BuildTags != "" {
+		cfg.BuildFlags = []string{"-tags=" + c.BuildTags}
+	}
 	pkgs, err := packages.Load(cfg, c.Path)
 	if err != nil {
 		return err
 	}
 	models := gatherModels(pkgs)
 	p := Payload{
-		Models:  models,
-		Dialect: c.Dialect,
+		Models:    models,
+		Dialect:   c.Dialect,
+		BuildTags: c.BuildTags,
 	}
 	var buf bytes.Buffer
 	if err := loaderTmpl.Execute(&buf, p); err != nil {
@@ -64,18 +69,18 @@ func (c *LoadCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	s, err := runprog(source)
+	s, err := runprog(source, c.BuildTags)
 	if err != nil {
 		return err
 	}
 	if c.out == nil {
 		c.out = os.Stdout
 	}
-	_, err = fmt.Fprintln(c.out, s)
+	_, err = fmt.Fprint(c.out, s)
 	return err
 }
 
-func runprog(src []byte) (string, error) {
+func runprog(src []byte, tags string) (string, error) {
 	if err := os.MkdirAll(".bunschema", os.ModePerm); err != nil {
 		return "", err
 	}
@@ -84,12 +89,12 @@ func runprog(src []byte) (string, error) {
 		return "", fmt.Errorf("bunschema: write file %s: %w", target, err)
 	}
 	defer os.RemoveAll(".bunschema")
-	return gorun(target)
+	return gorun(target, tags)
 }
 
 // run 'go run' command and return its output.
-func gorun(target string) (string, error) {
-	s, err := gocmd("run", target)
+func gorun(target, tags string) (string, error) {
+	s, err := gocmd("run", target, tags)
 	if err != nil {
 		return "", fmt.Errorf("bunschema: %s", err)
 	}
@@ -97,8 +102,11 @@ func gorun(target string) (string, error) {
 }
 
 // goCmd runs a go command and returns its output.
-func gocmd(command, target string) (string, error) {
+func gocmd(command, target string, tags string) (string, error) {
 	args := []string{command}
+	if tags != "" {
+		args = append(args, "-tags", tags)
+	}
 	args = append(args, target)
 	cmd := exec.Command("go", args...)
 	stderr := bytes.NewBuffer(nil)
@@ -117,8 +125,9 @@ func filename(pkg string) string {
 }
 
 type Payload struct {
-	Models  []model
-	Dialect string
+	Models    []model
+	Dialect   string
+	BuildTags string
 }
 
 func (p Payload) Imports() []string {

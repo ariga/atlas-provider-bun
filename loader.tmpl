@@ -17,6 +17,9 @@ func main() {
 		{{- if eq .Dialect "mssql" -}}
 			, bunschema.WithStmtDelimiter("\nGO")
 		{{- end -}}
+		{{- if .BuildTags -}}
+			, bunschema.WithBuildTags("{{ .BuildTags }}")
+		{{- end -}}
 			).Load(
 		{{- range .Models }}
 			&{{ .PkgName }}.{{ .Name }}{},
