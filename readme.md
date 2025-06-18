@@ -202,6 +202,10 @@ Models used in this example can be found under `internal/testdata/m2m/models`.
 
 To understand how to declare the many-to-many relation on your Bun models, consult the official Bun documentation: <https://bun.uptrace.dev/guide/relations.html#many-to-many-relation>
 
+### Issues
+
+Please report any issues or feature requests in the [ariga/atlas](https://github.com/ariga/atlas/issues) repository.
+
 ### License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
