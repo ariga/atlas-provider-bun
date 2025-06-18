@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
-
-	"maps"
 
 	"ariga.io/atlas-go-sdk/recordriver"
 	"github.com/uptrace/bun"
