@@ -4,7 +4,6 @@ import (
 	"io"
 	"fmt"
 	"os"
-
 	{{- range .Imports }}
 		"{{ . }}"
 	{{- end}}
@@ -13,7 +12,7 @@ import (
 )
 
 func main() {
-	stmts, err := bunschema.New("{{ .Dialect }}"
+	stmts, err := bunschema.New(bunschema.Dialect("{{ .Dialect }}")
 		{{- if eq .Dialect "mssql" -}}
 			, bunschema.WithStmtDelimiter("\nGO")
 		{{- end -}}

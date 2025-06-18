@@ -13,7 +13,7 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: go run . <dialect>")
 	}
-	stmt, err := bunschema.New(os.Args[1],
+	stmt, err := bunschema.New(bunschema.Dialect(os.Args[1]),
 		bunschema.WithJoinTable(&models.OrderToItem{}),
 	).Load(
 		&models.OrderToItem{},

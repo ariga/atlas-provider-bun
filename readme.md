@@ -99,7 +99,7 @@ import (
 )
 
 func main() {
-  stmts, err := bunschema.New("mysql").Load(
+  stmts, err := bunschema.New(bunschema.DialectMySQL).Load(
 		&User{},
 		&Post{},
 	)
@@ -185,7 +185,7 @@ When working in script mode you need to:
 For example (see `internal/testdata/m2m/loader.go` for a complete program):
 
 ```go
-stmts, err := bunschema.New("mysql",
+stmts, err := bunschema.New(bunschema.DialectMySQL,
     bunschema.WithJoinTable(&models.OrderToItem{}),
 ).Load(
     &models.OrderToItem{},
