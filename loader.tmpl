@@ -4,16 +4,16 @@ import (
 	"io"
 	"fmt"
 	"os"
-
 	{{- range .Imports }}
 		"{{ . }}"
 	{{- end}}
+	"ariga.io/atlas-provider-bun/bunschema/dialect"
 	"ariga.io/atlas-provider-bun/bunschema"
 	_ "ariga.io/atlas-go-sdk/recordriver"
 )
 
 func main() {
-	stmts, err := bunschema.New(bunschema.Dialect("{{ .Dialect }}")
+	stmts, err := bunschema.New(dialect.Dialect("{{ .Dialect }}")
 		{{- if eq .Dialect "mssql" -}}
 			, bunschema.WithStmtDelimiter("\nGO")
 		{{- end -}}
