@@ -16,6 +16,8 @@ import (
 	"text/template"
 	"time"
 
+	"ariga.io/atlas-provider-bun/bunschema"
+
 	"github.com/alecthomas/kong"
 	"golang.org/x/tools/go/packages"
 )
@@ -39,10 +41,10 @@ func main() {
 
 // LoadCmd is the command to load models
 type LoadCmd struct {
-	Path      string   `help:"Path to the model files" required:""`
-	BuildTags string   `help:"Build tags to use" default:""`
-	Models    []string `help:"Models to load"`
-	Dialect   string   `help:"Dialect to use" enum:"mysql,sqlite,postgres,mssql,oracle" required:""`
+	Path      string            `help:"Path to the model files" required:""`
+	BuildTags string            `help:"Build tags to use" default:""`
+	Models    []string          `help:"Models to load"`
+	Dialect   bunschema.Dialect `help:"Dialect to use" enum:"mysql,sqlite,postgres,mssql,oracle" required:""`
 	out       io.Writer
 }
 
@@ -126,7 +128,7 @@ func filename(pkg string) string {
 
 type Payload struct {
 	Models    []model
-	Dialect   string
+	Dialect   bunschema.Dialect
 	BuildTags string
 }
 

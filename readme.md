@@ -94,12 +94,13 @@ import (
   "os"
 
   "ariga.io/atlas-provider-bun/bunschema"
+  "ariga.io/atlas-provider-bun/bunschema/dialect"
   _ "ariga.io/atlas-go-sdk/recordriver"
   "github.com/<yourorg>/<yourrepo>/path/to/models"
 )
 
 func main() {
-  stmts, err := bunschema.New("mysql").Load(
+  stmts, err := bunschema.New(dialect.MySQL).Load(
 		&User{},
 		&Post{},
 	)
@@ -185,7 +186,7 @@ When working in script mode you need to:
 For example (see `internal/testdata/m2m/loader.go` for a complete program):
 
 ```go
-stmts, err := bunschema.New("mysql",
+stmts, err := bunschema.New(dialect.MySQL,
     bunschema.WithJoinTable(&models.OrderToItem{}),
 ).Load(
     &models.OrderToItem{},
