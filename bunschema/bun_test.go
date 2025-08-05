@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"ariga.io/atlas-go-sdk/recordriver"
 	"ariga.io/atlas-provider-bun/bunschema"
 	m2m "ariga.io/atlas-provider-bun/internal/testdata/m2m/models"
 	"ariga.io/atlas-provider-bun/internal/testdata/models"
+	"ariga.io/atlas/sdk/recordriver"
 	"github.com/stretchr/testify/require"
 )
 

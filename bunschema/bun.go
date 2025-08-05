@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"ariga.io/atlas-go-sdk/recordriver"
+	"ariga.io/atlas/sdk/recordriver"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/mssqldialect"
 	"github.com/uptrace/bun/dialect/mysqldialect"
@@ -131,19 +131,6 @@ func (l *Loader) Load(models ...any) (string, error) {
 	tables, err := topologicalSort(db.Dialect().Tables().All())
 	if err != nil {
 		return "", fmt.Errorf("failed to sort tables: %w", err)
-	}
-	if l.dialect == DialectOracle {
-		for _, t := range tables {
-			for _, rel := range t.Relations {
-				// Oracle does not support ON UPDATE, but Bun sets it to NO ACTION by default
-				// Tracking issue: https://github.com/uptrace/bun/issues/1212
-				rel.OnUpdate = ""
-				// Oracle supports ON DELETE CASCADE, and SET NULL only, but Bun sets it to NO ACTION by default
-				if rel.OnDelete != "CASCADE" && rel.OnDelete != "SET NULL" {
-					rel.OnDelete = ""
-				}
-			}
-		}
 	}
 	// Create tables in dependency order
 	for _, t := range tables {

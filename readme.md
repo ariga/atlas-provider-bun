@@ -94,7 +94,7 @@ import (
   "os"
 
   "ariga.io/atlas-provider-bun/bunschema"
-  _ "ariga.io/atlas-go-sdk/recordriver"
+  _ "ariga.io/atlas/sdk/recordriver"
   "github.com/<yourorg>/<yourrepo>/path/to/models"
 )
 
