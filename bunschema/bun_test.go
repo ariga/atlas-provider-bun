@@ -22,7 +22,7 @@ func TestMySQLConfig(t *testing.T) {
 	require.NoError(t, err)
 	requireEqualContent(t, removeCwd(sql), "testdata/mysql_default.sql")
 	resetSession()
-	l = bunschema.New("mysql", bunschema.WithJoinTable(&m2m.OrderToItem{}))
+	l = bunschema.New("mysql")
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
@@ -42,7 +42,7 @@ func TestSQLiteConfig(t *testing.T) {
 	require.NoError(t, err)
 	requireEqualContent(t, removeCwd(sql), "testdata/sqlite_default.sql")
 	resetSession()
-	l = bunschema.New("sqlite", bunschema.WithJoinTable(&m2m.OrderToItem{}))
+	l = bunschema.New("sqlite")
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
@@ -62,7 +62,7 @@ func TestPostgreSQLConfig(t *testing.T) {
 	require.NoError(t, err)
 	requireEqualContent(t, removeCwd(sql), "testdata/postgres_default.sql")
 	resetSession()
-	l = bunschema.New("postgres", bunschema.WithJoinTable(&m2m.OrderToItem{}))
+	l = bunschema.New("postgres")
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
@@ -82,7 +82,7 @@ func TestSQLServerConfig(t *testing.T) {
 	require.NoError(t, err)
 	requireEqualContent(t, removeCwd(sql), "testdata/mssql_default.sql")
 	resetSession()
-	l = bunschema.New("mssql", bunschema.WithStmtDelimiter("\nGO"), bunschema.WithJoinTable(&m2m.OrderToItem{}))
+	l = bunschema.New("mssql", bunschema.WithStmtDelimiter("\nGO"))
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
@@ -102,7 +102,7 @@ func TestOracleConfig(t *testing.T) {
 	require.NoError(t, err)
 	requireEqualContent(t, removeCwd(sql), "testdata/oracle_default.sql")
 	resetSession()
-	l = bunschema.New("oracle", bunschema.WithJoinTable(&m2m.OrderToItem{}))
+	l = bunschema.New("oracle")
 	sql, err = l.Load(
 		(*m2m.Item)(nil),
 		(*m2m.Order)(nil),
@@ -110,6 +110,34 @@ func TestOracleConfig(t *testing.T) {
 	)
 	require.NoError(t, err)
 	requireEqualContent(t, removeCwd(sql), "testdata/oracle_m2m.sql")
+}
+
+// TestM2MWithJoinTable tests backward compatibility with explicit WithJoinTable.
+func TestM2MWithJoinTable(t *testing.T) {
+	resetSession()
+	// Using deprecated WithJoinTable should still work
+	l := bunschema.New("postgres", bunschema.WithJoinTable((*m2m.OrderToItem)(nil)))
+	sql, err := l.Load(
+		(*m2m.Item)(nil),
+		(*m2m.Order)(nil),
+		(*m2m.OrderToItem)(nil),
+	)
+	require.NoError(t, err)
+	requireEqualContent(t, removeCwd(sql), "testdata/postgres_m2m.sql")
+}
+
+// TestM2MAutoDetect tests that join tables are auto-detected without WithJoinTable.
+func TestM2MAutoDetect(t *testing.T) {
+	resetSession()
+	// Models passed in "wrong" order - join table last
+	l := bunschema.New("postgres")
+	sql, err := l.Load(
+		(*m2m.Order)(nil),
+		(*m2m.Item)(nil),
+		(*m2m.OrderToItem)(nil),
+	)
+	require.NoError(t, err)
+	requireEqualContent(t, removeCwd(sql), "testdata/postgres_m2m.sql")
 }
 
 func resetSession() {

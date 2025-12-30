@@ -67,6 +67,10 @@ func WithStmtDelimiter(delimiter string) Option {
 }
 
 // WithJoinTable registers the given models as join tables.
+//
+// Deprecated: Join tables are now auto-detected based on struct tags.
+// Models with rel:belongs-to (but no m2m) are automatically registered first.
+// This option is kept for backward compatibility but is no longer required.
 func WithJoinTable(models ...any) Option {
 	return func(l *Loader) {
 		l.joinTables = append(l.joinTables, models...)
@@ -123,10 +127,9 @@ func (l *Loader) Load(models ...any) (string, error) {
 	}
 	db := bun.NewDB(rc, di)
 	for _, m := range l.joinTables {
-		// Bun requires join tables to be registered before use
 		db.RegisterModel(m)
 	}
-	db.RegisterModel(models...)
+	db.RegisterModel(orderModels(models)...)
 	// Sort tables topologically based on their dependencies
 	tables, err := topologicalSort(db.Dialect().Tables().All())
 	if err != nil {
@@ -271,7 +274,7 @@ func validate(v any) error {
 	switch {
 	case t == nil:
 		return fmt.Errorf("model is nil")
-	case t.Kind() != reflect.Ptr:
+	case t.Kind() != reflect.Pointer:
 		return fmt.Errorf("model must be a pointer, got %s", t.Kind())
 	case t.Elem().Kind() != reflect.Struct:
 		return fmt.Errorf("model must point to a struct, got pointer to %s", t.Elem().Kind())
@@ -338,4 +341,31 @@ func getTableDependencies(t *schema.Table) []string {
 		}
 	}
 	return deps
+}
+
+// orderModels sorts models so join tables (rel:belongs-to) come before m2m models.
+func orderModels(models []any) []any {
+	var join, m2m, other []any
+	for _, m := range models {
+		t := reflect.TypeOf(m).Elem()
+		hasM2M, hasBelongsTo := false, false
+		for i := range t.NumField() {
+			tag := t.Field(i).Tag.Get("bun")
+			switch {
+			case strings.Contains(tag, "m2m:"):
+				hasM2M = true
+			case strings.Contains(tag, "rel:belongs-to"):
+				hasBelongsTo = true
+			}
+		}
+		switch {
+		case hasBelongsTo && !hasM2M:
+			join = append(join, m)
+		case hasM2M:
+			m2m = append(m2m, m)
+		default:
+			other = append(other, m)
+		}
+	}
+	return slices.Concat(join, other, m2m)
 }
