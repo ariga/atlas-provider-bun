@@ -175,30 +175,48 @@ The provider supports the following databases:
 
 ### Frequently Asked Questions
 
-- **Many-to-many relationships support** - The provider fully supports many-to-many relations, but ONLY when it is used in [Script mode](#as-go-file). The standalone mode that relies on the `--path` flag cannot automatically discover join tables and therefore does **not** support many-to-many schemas.
+- **Many-to-many relationships support** - The provider fully supports many-to-many relations in both [Standalone mode](#standalone) and [Script mode](#as-go-file). The provider automatically detects join tables based on struct tags and registers them in the correct order.
 
-When working in script mode you need to:
-
-1. Register the join table via the `bunschema.WithJoinTable` option.
-2. Pass the join table model together with the related models to the `Load` function.
-
-For example (see `internal/testdata/m2m/loader.go` for a complete program):
+For example, given the following models:
 
 ```go
-stmts, err := bunschema.New(bunschema.DialectMySQL,
-    bunschema.WithJoinTable(&models.OrderToItem{}),
-).Load(
-    &models.OrderToItem{},
-    &models.Item{},
+// Order has many Items via OrderToItem join table
+type Order struct {
+    ID    int64  `bun:",pk,autoincrement"`
+    Items []Item `bun:"m2m:order_to_items,join:Order=Item"`
+}
+
+type Item struct {
+    ID     int64   `bun:",pk,autoincrement"`
+    Orders []Order `bun:"m2m:order_to_items,join:Item=Order"`
+}
+
+// OrderToItem is the join table (auto-detected via rel:belongs-to tags)
+type OrderToItem struct {
+    OrderID int64  `bun:",pk"`
+    Order   *Order `bun:"rel:belongs-to,join:order_id=id"`
+    ItemID  int64  `bun:",pk"`
+    Item    *Item  `bun:"rel:belongs-to,join:item_id=id"`
+}
+```
+
+**Standalone mode:**
+```bash
+atlas-provider-bun load --path ./path/to/models --dialect mysql
+```
+
+**Script mode** (see `internal/testdata/m2m/loader.go` for a complete program):
+```go
+stmts, err := bunschema.New(bunschema.DialectMySQL).Load(
     &models.Order{},
+    &models.Item{},
+    &models.OrderToItem{}, // join table - auto-detected
 )
 if err != nil {
     log.Fatal(err)
 }
 fmt.Println(stmts)
 ```
-
-Models used in this example can be found under `internal/testdata/m2m/models`.
 
 To understand how to declare the many-to-many relation on your Bun models, consult the official Bun documentation: <https://bun.uptrace.dev/guide/relations.html#many-to-many-relation>
 

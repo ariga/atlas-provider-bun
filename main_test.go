@@ -66,3 +66,24 @@ func TestNonBuildTags(t *testing.T) {
 	require.Contains(t, buf.String(), "CREATE TABLE `untagged_models`")
 	require.NotContains(t, buf.String(), "CREATE TABLE `tagged_models`")
 }
+
+func TestM2MStandalone(t *testing.T) {
+	for _, d := range []string{"mysql", "sqlite", "postgres", "mssql", "oracle"} {
+		t.Run(d, func(t *testing.T) {
+			var buf bytes.Buffer
+			cmd := &LoadCmd{
+				Path:    "./internal/testdata/m2m/models",
+				Dialect: bunschema.Dialect(d),
+				out:     &buf,
+			}
+			err := cmd.Run()
+			require.NoError(t, err)
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
+			content, err := os.ReadFile("bunschema/testdata/" + d + "_m2m.sql")
+			require.NoError(t, err)
+			bufStr := strings.ReplaceAll(buf.String(), cwd+string(os.PathSeparator), "")
+			require.Equal(t, string(content), bufStr, "standalone m2m should match golden file for %s", d)
+		})
+	}
+}
